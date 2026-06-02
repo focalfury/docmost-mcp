@@ -284,7 +284,7 @@ class DocmostClient {
     });
 
     // Filter search results (data is directly an array)
-    const items = response.data?.data || [];
+    const items = response.data?.data?.items || [];
     const filteredItems = items.map((item: any) => filterSearchResult(item));
 
     return {
