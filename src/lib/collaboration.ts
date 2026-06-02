@@ -25,9 +25,7 @@ export async function updatePageContentRealtime(
   baseUrl: string,
 ): Promise<void> {
   console.error(`Starting realtime update for page ${pageId}`);
-  console.error(
-    `Token prefix: ${collabToken ? collabToken.substring(0, 5) : "NONE"}...`,
-  );
+  console.error(`Collab token: ${collabToken ? "present" : "absent"}`);
 
   // 1. Convert Markdown to HTML
   const html = await marked.parse(markdownContent);

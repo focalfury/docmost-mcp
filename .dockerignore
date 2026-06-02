@@ -1,3 +1,8 @@
+.git
+.gitignore
 node_modules
 build
 *.md
+*.log
+.env
+mcp_config*.json
