@@ -260,11 +260,8 @@ class DocmostClient {
         "Failed to update page content via realtime collaboration:",
         error,
       );
-      const tokenPreview = collabToken
-        ? collabToken.substring(0, 15) + "..."
-        : "null";
       throw new Error(
-        `Failed to update page content: ${error.message} (Token: ${tokenPreview})`,
+        `Failed to update page content: ${error.message} (collab token ${collabToken ? "present" : "absent"})`,
       );
     }
 
