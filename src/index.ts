@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import http from "http";
 import FormData from "form-data";
 import axios, { AxiosInstance } from "axios";
 import { z } from "zod";
@@ -542,8 +543,20 @@ server.registerTool(
 );
 
 async function run() {
-  const transport = new StdioServerTransport();
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined, // stateless mode
+  });
+
+  const httpServer = http.createServer(async (req, res) => {
+    await transport.handleRequest(req, res);
+  });
+
   await server.connect(transport);
+
+  const port = parseInt(process.env.PORT || "8000");
+  httpServer.listen(port, "0.0.0.0", () => {
+    console.error(`docmost-mcp listening on port ${port}`);
+  });
 }
 
 run().catch((error) => {
