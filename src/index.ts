@@ -386,11 +386,11 @@ server.registerTool(
   {
     description: "List pages in a space ordered by updatedAt (descending).",
     inputSchema: {
-      spaceId: z.string().optional(),
+      space_id: z.string().optional().describe("ID of the space to list pages from. Omit to list pages across all spaces."),
     },
   },
-  async ({ spaceId }) => {
-    const result = await docmostClient.listPages(spaceId);
+  async ({ space_id }) => {
+    const result = await docmostClient.listPages(space_id);
     return jsonContent(result);
   },
 );
@@ -401,11 +401,11 @@ server.registerTool(
   {
     description: "Get details and content of a specific page by ID",
     inputSchema: {
-      pageId: z.string(),
+      page_id: z.string().describe("ID of the page to retrieve"),
     },
   },
-  async ({ pageId }) => {
-    const page = await docmostClient.getPage(pageId);
+  async ({ page_id }) => {
+    const page = await docmostClient.getPage(page_id);
     return jsonContent(page);
   },
 );
@@ -419,19 +419,19 @@ server.registerTool(
     inputSchema: {
       title: z.string().describe("Title of the page"),
       content: z.string().describe("Markdown content"),
-      spaceId: z.string(),
-      parentPageId: z
+      space_id: z.string().describe("ID of the space to create the page in"),
+      parent_page_id: z
         .string()
         .optional()
         .describe("Optional parent page ID to nest under"),
     },
   },
-  async ({ title, content, spaceId, parentPageId }) => {
+  async ({ title, content, space_id, parent_page_id }) => {
     const result = await docmostClient.createPage(
       title,
       content,
-      spaceId,
-      parentPageId,
+      space_id,
+      parent_page_id,
     );
     return jsonContent(result);
   },
@@ -444,13 +444,13 @@ server.registerTool(
     description:
       "Update a page's content and/or title via realtime collaboration (preserves Page ID and history).",
     inputSchema: {
-      pageId: z.string().describe("ID of the page to update"),
+      page_id: z.string().describe("ID of the page to update"),
       content: z.string().describe("New Markdown content"),
       title: z.string().optional().describe("Optional new title"),
     },
   },
-  async ({ pageId, content, title }) => {
-    const result = await docmostClient.updatePage(pageId, content, title);
+  async ({ page_id, content, title }) => {
+    const result = await docmostClient.updatePage(page_id, content, title);
     return jsonContent(result);
   },
 );
@@ -462,8 +462,8 @@ server.registerTool(
     description:
       "Move a page to a new parent (nesting) or root. Essential for organizing pages created via 'import_page'.",
     inputSchema: {
-      pageId: z.string(),
-      parentPageId: z
+      page_id: z.string().describe("ID of the page to move"),
+      parent_page_id: z
         .string()
         .nullable()
         .optional()
@@ -478,18 +478,18 @@ server.registerTool(
         ),
     },
   },
-  async ({ pageId, parentPageId, position }) => {
-    // Ensure parentPageId is null if string "null" or empty is passed, or undefined
+  async ({ page_id, parent_page_id, position }) => {
+    // Ensure parent_page_id is null if string "null" or empty is passed, or undefined
     // Note: Zod handles type checking, but we double check for empty strings just in case
     const finalParentId =
-      parentPageId === "" || parentPageId === "null" ? null : parentPageId;
+      parent_page_id === "" || parent_page_id === "null" ? null : parent_page_id;
 
-    await docmostClient.movePage(pageId, finalParentId || null, position);
+    await docmostClient.movePage(page_id, finalParentId || null, position);
     return {
       content: [
         {
           type: "text",
-          text: `Successfully moved page ${pageId} to parent ${finalParentId || "root"}`,
+          text: `Successfully moved page ${page_id} to parent ${finalParentId || "root"}`,
         },
       ],
     };
@@ -502,13 +502,13 @@ server.registerTool(
   {
     description: "Delete a single page by ID.",
     inputSchema: {
-      pageId: z.string(),
+      page_id: z.string().describe("ID of the page to delete"),
     },
   },
-  async ({ pageId }) => {
-    await docmostClient.deletePage(pageId);
+  async ({ page_id }) => {
+    await docmostClient.deletePage(page_id);
     return {
-      content: [{ type: "text", text: `Successfully deleted page ${pageId}` }],
+      content: [{ type: "text", text: `Successfully deleted page ${page_id}` }],
     };
   },
 );
@@ -519,11 +519,11 @@ server.registerTool(
   {
     description: "Delete multiple pages at once. Useful for cleanup.",
     inputSchema: {
-      pageIds: z.array(z.string()),
+      page_ids: z.array(z.string()).describe("Array of page IDs to delete"),
     },
   },
-  async ({ pageIds }) => {
-    const results = await docmostClient.deletePages(pageIds);
+  async ({ page_ids }) => {
+    const results = await docmostClient.deletePages(page_ids);
     return jsonContent(results);
   },
 );
@@ -535,11 +535,11 @@ server.registerTool(
     description: "Search for pages and content.",
     inputSchema: {
       query: z.string().describe("Search query"),
-      spaceId: z.string().optional().describe("Optional space ID to filter by"),
+      space_id: z.string().optional().describe("Optional space ID to filter results to a specific space"),
     },
   },
-  async ({ query, spaceId }) => {
-    const result = await docmostClient.search(query, spaceId);
+  async ({ query, space_id }) => {
+    const result = await docmostClient.search(query, space_id);
     return jsonContent(result);
   },
 );
