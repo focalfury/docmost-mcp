@@ -13,7 +13,7 @@ A Model Context Protocol (MCP) server for [Docmost](https://docmost.com/), enabl
 
 ### Exploration & Retrieval
 
-- **`search`**: Full-text search across spaces with optional space filtering (`query`, `spaceId`).
+- **`search`**: Full-text search across spaces with optional space filtering (`query`, `space_id`).
 - **`get_workspace`**: Get information about the current Docmost workspace.
 - **`list_spaces`**: View all spaces within the current workspace.
 - **`list_groups`**: View all groups within the current workspace.
@@ -24,7 +24,7 @@ A Model Context Protocol (MCP) server for [Docmost](https://docmost.com/), enabl
 
 - **Automatic Markdown Conversion**: Page content is automatically converted from Docmost's internal ProseMirror/TipTap JSON format to clean Markdown for easy agent consumption. Supports all Docmost extensions including callouts, task lists, math blocks, embeds, and more.
 - **Smart Import API**: Uses Docmost's import API to ensure clean Markdown-to-ProseMirror conversion when creating pages.
-- **Child Preservation**: The `update_page` tool creates a new page ID but effectively simulates an in-place update by reparenting existing child pages to the new version.
+- **Non-destructive Updates**: The `update_page` tool updates content via WebSocket real-time collaboration, preserving the existing page ID and full revision history. Child pages and backlinks are unaffected.
 - **Pagination Support**: Automatically handles pagination for large datasets (spaces, pages, groups).
 - **Filtered Responses**: API responses are filtered to include only relevant information, optimizing data transfer for agents.
 
