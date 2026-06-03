@@ -38,7 +38,6 @@ if (!API_URL || !EMAIL || !PASSWORD) {
 }
 
 class DocmostClient {
-  // ... [Client Implementation stays exactly the same] ...
   private client: AxiosInstance;
   private token: string | null = null;
 
@@ -52,14 +51,10 @@ class DocmostClient {
   }
 
   async login() {
-    if (!EMAIL || !PASSWORD) {
-      throw new Error("Missing Credentials (DOCMOST_EMAIL, DOCMOST_PASSWORD)");
-    }
-    // baseURL is already set in this.client
     const baseURL = this.client.defaults.baseURL || "";
 
     // Use shared auth utility
-    this.token = await performLogin(baseURL, EMAIL, PASSWORD);
+    this.token = await performLogin(baseURL, EMAIL!, PASSWORD!);
     this.client.defaults.headers.common["Authorization"] =
       `Bearer ${this.token}`;
   }
@@ -342,7 +337,7 @@ const jsonContent = (data: any) => ({
   content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
 });
 
-// Tool: list_workspaces
+// Tool: get_workspace
 server.registerTool(
   "get_workspace",
   {
@@ -458,7 +453,7 @@ server.registerTool(
   "move_page",
   {
     description:
-      "Move a page to a new parent (nesting) or root. Essential for organizing pages created via 'import_page'.",
+      "Move a page to a new parent (nesting) or root.",
     inputSchema: {
       page_id: z.string().describe("ID of the page to move"),
       parent_page_id: z
