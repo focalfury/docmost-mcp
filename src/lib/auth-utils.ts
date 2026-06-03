@@ -16,13 +16,12 @@ export async function getCollabToken(
       },
     );
 
-    // console.error('Collab Token Response:', response.data);
     // Response is wrapped in { data: { token: ... } }
     return response.data.data?.token || response.data.token;
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(
-        `Failed to get collab token: ${error.response?.status} ${error.response?.statusText} - ${JSON.stringify(error.response?.data)}`,
+        `Failed to get collab token: ${error.response?.status} ${error.response?.statusText}`,
       );
     }
     throw error;
@@ -53,10 +52,9 @@ export async function performLogin(
     const token = authCookie.split(";")[0].split("=")[1];
     return token;
   } catch (error: any) {
-    console.error(
-      "Login failed:",
-      axios.isAxiosError(error) ? error.response?.data : error.message,
+    const status = axios.isAxiosError(error) ? error.response?.status : null;
+    throw new Error(
+      status ? `Login failed: HTTP ${status}` : `Login failed: ${error.message}`,
     );
-    throw error;
   }
 }
