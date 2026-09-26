@@ -121,15 +121,35 @@ export function convertProseMirrorToMarkdown(content: any): string {
         const youtubeUrl = node.attrs?.src || "";
         return `📺 [YouTube Video](${youtubeUrl})`;
 
-      case "table":
-        return nodeContent.map(processNode).join("\n");
+      case "table": {
+        const rows = nodeContent.map(processNode);
+        if (rows.length === 0) return "";
+        // GFM needs a delimiter row after the header. Without it the block
+        // re-parses as plain paragraphs, so a read -> update_page round-trip
+        // silently demotes the table to text.
+        const columns = nodeContent[0]?.content?.length || 0;
+        const delimiter = "|" + " --- |".repeat(columns);
+        const hasHeader = nodeContent[0]?.content?.[0]?.type === "tableHeader";
+        // A headerless table still needs a header row to parse at all.
+        return hasHeader
+          ? [rows[0], delimiter, ...rows.slice(1)].join("\n")
+          : ["|" + "  |".repeat(columns), delimiter, ...rows].join("\n");
+      }
 
       case "tableRow":
         return "| " + nodeContent.map(processNode).join(" | ") + " |";
 
       case "tableCell":
       case "tableHeader":
-        return nodeContent.map(processNode).join("");
+        // Cells have to stay on one line — a hardBreak inside one would split
+        // the row — and literal pipes need escaping so they don't read as
+        // column separators.
+        return nodeContent
+          .map(processNode)
+          .join("")
+          .replace(/\|/g, "\\|")
+          .replace(/\s*\n+\s*/g, " ")
+          .trim();
 
       case "callout":
         const calloutType = node.attrs?.type || "info";
