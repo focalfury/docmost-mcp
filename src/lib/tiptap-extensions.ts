@@ -1,6 +1,7 @@
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
+import { TaskItem, TaskList } from "@tiptap/extension-list";
 import {
   Table,
   TableCell,
@@ -29,4 +30,10 @@ export const tiptapExtensions = [
   TableRow,
   TableHeader,
   TableCell,
+  // Checkboxes would otherwise land as plain bullets. nested matches how
+  // Docmost configures TaskItem, so nested items survive too.
+  TaskList,
+  TaskItem.configure({
+    nested: true,
+  }),
 ];

@@ -18,6 +18,41 @@ global.WebSocket = WebSocket;
 // Navigator is read-only in newer Node versions and already exists
 // global.navigator = dom.window.navigator;
 
+/**
+ * marked renders GFM task lists as <li><input type="checkbox">, but Tiptap's
+ * TaskList/TaskItem parse on data-type attributes and ignore that markup —
+ * checkboxes would degrade to plain bullets. Rewrite it to what they expect.
+ */
+function markTaskLists(html: string): string {
+  const doc = new JSDOM(`<body>${html}</body>`).window.document;
+
+  doc.querySelectorAll("ul").forEach((list) => {
+    const items = Array.from(list.children).filter((child) => {
+      const first = child.firstElementChild;
+      return (
+        child.tagName === "LI" &&
+        first?.tagName === "INPUT" &&
+        first.getAttribute("type") === "checkbox"
+      );
+    });
+
+    if (items.length === 0) return;
+
+    list.setAttribute("data-type", "taskList");
+    items.forEach((item) => {
+      const checkbox = item.firstElementChild!;
+      item.setAttribute("data-type", "taskItem");
+      item.setAttribute(
+        "data-checked",
+        checkbox.hasAttribute("checked") ? "true" : "false",
+      );
+      checkbox.remove();
+    });
+  });
+
+  return doc.body.innerHTML;
+}
+
 export async function updatePageContentRealtime(
   pageId: string,
   markdownContent: string,
@@ -28,7 +63,7 @@ export async function updatePageContentRealtime(
   console.error(`Collab token: ${collabToken ? "present" : "absent"}`);
 
   // 1. Convert Markdown to HTML
-  const html = await marked.parse(markdownContent);
+  const html = markTaskLists(await marked.parse(markdownContent));
 
   // 2. Convert HTML to ProseMirror JSON
   const tiptapJson = generateJSON(html, tiptapExtensions);
