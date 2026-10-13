@@ -269,6 +269,47 @@ class DocmostClient {
     };
   }
 
+  /**
+   * Apply exact find/replace edits to a page's Markdown and save it, so the
+   * caller sends only the changed snippets instead of retyping the whole page.
+   * Edits run against the live collaborative document, so back-to-back edits
+   * don't read a stale copy. All edits must match exactly once or nothing is
+   * written.
+   */
+  async editPage(pageId: string, edits: { find: string; replace: string }[]) {
+    await this.ensureAuthenticated();
+    const baseURL = this.client.defaults.baseURL || "";
+    const collabToken = await getCollabToken(baseURL, this.token!);
+
+    await updatePageContentRealtime(
+      pageId,
+      (current) => {
+        let content = current;
+        const problems: string[] = [];
+        for (const [i, { find, replace }] of edits.entries()) {
+          const count = find ? content.split(find).length - 1 : 0;
+          if (count !== 1) {
+            problems.push(
+              `edit ${i + 1}: "find" matched ${count} times (must be exactly 1)`,
+            );
+            continue;
+          }
+          content = content.replace(find, () => replace);
+        }
+        if (problems.length > 0) {
+          throw new Error(
+            `No changes written. ${problems.join("; ")}. Copy "find" text verbatim from get_page ` +
+              "and include enough surrounding text to be unique.",
+          );
+        }
+        return content;
+      },
+      collabToken,
+      baseURL,
+    );
+    return { success: true, pageId, editsApplied: edits.length };
+  }
+
   async search(query: string, spaceId?: string) {
     await this.ensureAuthenticated();
     const response = await this.client.post("/search", {
@@ -353,7 +394,18 @@ const withNotFoundHint = async <T>(fn: () => Promise<T>): Promise<T> => {
   }
 };
 
-const ID_HINT = "Must be a real ID copied from a search/list_spaces result; never guess.";
+const ID_HINT = "Must be a real ID copied from the space list above or a search result; never guess.";
+
+// Space IDs go straight into the tool descriptions so the model never has to
+// look them up (or invent them). Loaded once at startup; restart to pick up
+// new spaces.
+const spaces = await docmostClient.getSpaces().catch((e: any) => {
+  console.error("Could not load spaces for tool descriptions:", e.message);
+  return [] as any[];
+});
+const SPACES = spaces.length
+  ? ` Spaces: ${spaces.map((sp: any) => `${sp.name}=${sp.id}`).join(", ")}.`
+  : "";
 
 // Tool: get_workspace
 server.registerTool(
@@ -371,7 +423,7 @@ server.registerTool(
 server.registerTool(
   "list_spaces",
   {
-    description: "List all spaces with their IDs. Needed only to choose a space for create_page; search results already include spaceId.",
+    description: "List all spaces with their IDs. Rarely needed: the search tool description already lists them.",
   },
   async () => {
     const spaces = await docmostClient.getSpaces();
@@ -432,7 +484,7 @@ server.registerTool(
     inputSchema: {
       title: z.string().describe("Title of the page"),
       content: z.string().describe("Markdown content"),
-      space_id: z.string().describe(`ID of the space to create the page in. ${ID_HINT}`),
+      space_id: z.string().describe(`ID of the space to create the page in.${SPACES}`),
       parent_page_id: z
         .string()
         .optional()
@@ -452,8 +504,8 @@ server.registerTool(
   "update_page",
   {
     description:
-      "Update a page's content and/or title via realtime collaboration (preserves Page ID and history). " +
-      "Replaces the whole body: get_page first and send the complete edited content.",
+      "Replace a page's entire body and/or title (preserves Page ID and history). Slow for big pages: " +
+      "prefer edit_page for changes to existing pages. Use this only for rewrites of most of the page.",
     inputSchema: {
       page_id: z.string().describe(`ID of the page to update. ${ID_HINT}`),
       content: z.string().describe("New Markdown content"),
@@ -462,6 +514,34 @@ server.registerTool(
   },
   async ({ page_id, content, title }) => {
     const result = await withNotFoundHint(() => docmostClient.updatePage(page_id, content, title));
+    return jsonContent(result);
+  },
+);
+
+// Tool: edit_page
+server.registerTool(
+  "edit_page",
+  {
+    description:
+      "PREFERRED way to change an existing page: exact find/replace on its Markdown, so you send only the " +
+      "changed parts. get_page first; copy each find string verbatim with enough context to be unique. " +
+      "To insert, find an adjacent line and replace it with that line plus the new text. " +
+      "All edits apply or none do.",
+    inputSchema: {
+      page_id: z.string().describe(`ID of the page to edit. ${ID_HINT}`),
+      edits: z
+        .array(
+          z.object({
+            find: z.string().describe("Exact existing text; must occur exactly once"),
+            replace: z.string().describe("Replacement text (empty string deletes)"),
+          }),
+        )
+        .min(1)
+        .describe("Edits applied in order"),
+    },
+  },
+  async ({ page_id, edits }) => {
+    const result = await withNotFoundHint(() => docmostClient.editPage(page_id, edits));
     return jsonContent(result);
   },
 );
@@ -545,7 +625,8 @@ server.registerTool(
   {
     description:
       "START HERE for any Docmost lookup. Full-text search across all spaces; each result has id, title, " +
-      "spaceId, spaceName and a highlight snippet. Then get_page with the id. Use 2-4 distinctive keywords.",
+      "spaceId, spaceName and a highlight snippet. Then get_page with the id. Use 2-4 distinctive keywords." +
+      SPACES,
     inputSchema: {
       query: z.string().describe("Search query"),
       space_id: z.string().optional().describe(`Optional space filter. Usually omit it. ${ID_HINT}`),

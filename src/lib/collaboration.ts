@@ -6,6 +6,7 @@ import { marked } from "marked";
 import { generateJSON } from "@tiptap/html";
 import { JSDOM } from "jsdom";
 import { tiptapExtensions } from "./tiptap-extensions.js";
+import { convertProseMirrorToMarkdown } from "./markdown-converter.js";
 
 // Setup DOM environment for Tiptap HTML parsing in Node.js
 const dom = new JSDOM("<!DOCTYPE html><html><body></body></html>");
@@ -53,22 +54,26 @@ function markTaskLists(html: string): string {
   return doc.body.innerHTML;
 }
 
+/**
+ * Replace a page's content over the collaboration socket. `content` is either
+ * the new Markdown or a function from the page's current Markdown to the new
+ * Markdown. The function form reads the live document, not the REST copy,
+ * which lags behind recent edits by Docmost's ~10s save debounce.
+ */
 export async function updatePageContentRealtime(
   pageId: string,
-  markdownContent: string,
+  content: string | ((currentMarkdown: string) => string),
   collabToken: string,
   baseUrl: string,
 ): Promise<void> {
   console.error(`Starting realtime update for page ${pageId}`);
   console.error(`Collab token: ${collabToken ? "present" : "absent"}`);
 
-  // 1. Convert Markdown to HTML
-  const html = markTaskLists(await marked.parse(markdownContent));
+  // Markdown -> HTML -> ProseMirror JSON
+  const toTiptapJson = async (markdown: string) =>
+    generateJSON(markTaskLists(await marked.parse(markdown)), tiptapExtensions);
 
-  // 2. Convert HTML to ProseMirror JSON
-  const tiptapJson = generateJSON(html, tiptapExtensions);
-
-  // 3. Setup Hocuspocus Provider
+  // Setup Hocuspocus Provider
   const ydoc = new Y.Doc();
 
   // Construct WebSocket URL
@@ -112,9 +117,19 @@ export async function updatePageContentRealtime(
       onConnect: () => console.error("WS Connect"),
       onDisconnect: (data) => console.error("WS Disconnect"),
       onClose: (data) => console.error("WS Close"),
-      onSynced: () => {
+      onSynced: async () => {
         console.error("Connected and synced!");
         try {
+          const markdown =
+            typeof content === "string"
+              ? content
+              : content(
+                  convertProseMirrorToMarkdown(
+                    TiptapTransformer.fromYdoc(ydoc, "default"),
+                  ),
+                );
+          const tiptapJson = await toTiptapJson(markdown);
+
           // Prepare the new content in a separate doc
           const tempDoc = TiptapTransformer.toYdoc(
             tiptapJson,
