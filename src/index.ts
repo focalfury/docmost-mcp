@@ -337,6 +337,24 @@ const jsonContent = (data: any) => ({
   content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
 });
 
+// A 404 almost always means the model guessed an ID; say so instead of
+// returning a bare "Request failed with status code 404".
+const withNotFoundHint = async <T>(fn: () => Promise<T>): Promise<T> => {
+  try {
+    return await fn();
+  } catch (e: any) {
+    if (e?.response?.status === 404) {
+      throw new Error(
+        "Not found (404): an ID in this call does not exist. Never guess IDs; " +
+          "call search (without space_id) and use the id/spaceId from its results.",
+      );
+    }
+    throw e;
+  }
+};
+
+const ID_HINT = "Must be a real ID copied from a search/list_spaces result; never guess.";
+
 // Tool: get_workspace
 server.registerTool(
   "get_workspace",
@@ -353,7 +371,7 @@ server.registerTool(
 server.registerTool(
   "list_spaces",
   {
-    description: "List all available spaces in Docmost",
+    description: "List all spaces with their IDs. Needed only to choose a space for create_page; search results already include spaceId.",
   },
   async () => {
     const spaces = await docmostClient.getSpaces();
@@ -377,13 +395,15 @@ server.registerTool(
 server.registerTool(
   "list_pages",
   {
-    description: "List pages in a space ordered by updatedAt (descending).",
+    description:
+      "List every page in a space (large output). Do NOT use this to find a page; use search first. " +
+      "Only use when the user asks to browse a space or search found nothing.",
     inputSchema: {
-      space_id: z.string().optional().describe("ID of the space to list pages from. Omit to list pages across all spaces."),
+      space_id: z.string().optional().describe(`ID of the space to list pages from. Omit to list pages across all spaces. ${ID_HINT}`),
     },
   },
   async ({ space_id }) => {
-    const result = await docmostClient.listPages(space_id);
+    const result = await withNotFoundHint(() => docmostClient.listPages(space_id));
     return jsonContent(result);
   },
 );
@@ -392,13 +412,13 @@ server.registerTool(
 server.registerTool(
   "get_page",
   {
-    description: "Get details and content of a specific page by ID",
+    description: "Get the full content of a page by ID. Find the ID with search first.",
     inputSchema: {
-      page_id: z.string().describe("ID of the page to retrieve"),
+      page_id: z.string().describe(`ID of the page to retrieve. ${ID_HINT}`),
     },
   },
   async ({ page_id }) => {
-    const page = await docmostClient.getPage(page_id);
+    const page = await withNotFoundHint(() => docmostClient.getPage(page_id));
     return jsonContent(page);
   },
 );
@@ -412,19 +432,16 @@ server.registerTool(
     inputSchema: {
       title: z.string().describe("Title of the page"),
       content: z.string().describe("Markdown content"),
-      space_id: z.string().describe("ID of the space to create the page in"),
+      space_id: z.string().describe(`ID of the space to create the page in. ${ID_HINT}`),
       parent_page_id: z
         .string()
         .optional()
-        .describe("Optional parent page ID to nest under"),
+        .describe(`Optional parent page ID to nest under. ${ID_HINT}`),
     },
   },
   async ({ title, content, space_id, parent_page_id }) => {
-    const result = await docmostClient.createPage(
-      title,
-      content,
-      space_id,
-      parent_page_id,
+    const result = await withNotFoundHint(() =>
+      docmostClient.createPage(title, content, space_id, parent_page_id),
     );
     return jsonContent(result);
   },
@@ -435,15 +452,16 @@ server.registerTool(
   "update_page",
   {
     description:
-      "Update a page's content and/or title via realtime collaboration (preserves Page ID and history).",
+      "Update a page's content and/or title via realtime collaboration (preserves Page ID and history). " +
+      "Replaces the whole body: get_page first and send the complete edited content.",
     inputSchema: {
-      page_id: z.string().describe("ID of the page to update"),
+      page_id: z.string().describe(`ID of the page to update. ${ID_HINT}`),
       content: z.string().describe("New Markdown content"),
       title: z.string().optional().describe("Optional new title"),
     },
   },
   async ({ page_id, content, title }) => {
-    const result = await docmostClient.updatePage(page_id, content, title);
+    const result = await withNotFoundHint(() => docmostClient.updatePage(page_id, content, title));
     return jsonContent(result);
   },
 );
@@ -525,14 +543,16 @@ server.registerTool(
 server.registerTool(
   "search",
   {
-    description: "Search for pages and content.",
+    description:
+      "START HERE for any Docmost lookup. Full-text search across all spaces; each result has id, title, " +
+      "spaceId, spaceName and a highlight snippet. Then get_page with the id. Use 2-4 distinctive keywords.",
     inputSchema: {
       query: z.string().describe("Search query"),
-      space_id: z.string().optional().describe("Optional space ID to filter results to a specific space"),
+      space_id: z.string().optional().describe(`Optional space filter. Usually omit it. ${ID_HINT}`),
     },
   },
   async ({ query, space_id }) => {
-    const result = await docmostClient.search(query, space_id);
+    const result = await withNotFoundHint(() => docmostClient.search(query, space_id));
     return jsonContent(result);
   },
 );
